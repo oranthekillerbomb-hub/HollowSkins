@@ -42,6 +42,7 @@ import java.util.regex.Pattern;
 
 public final class HollowSkins extends JavaPlugin implements Listener, TabExecutor {
     private final Map<String, Texture> cache = new ConcurrentHashMap<>();
+    private final java.util.Set<String> pendingPreviews = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Long> generation = new ConcurrentHashMap<>();
     private HttpClient http;
     private File selectionsFile;
@@ -83,7 +84,7 @@ public final class HollowSkins extends JavaPlugin implements Listener, TabExecut
 
     @EventHandler public void onJoin(PlayerJoinEvent e) {
         Player player = e.getPlayer();
-        if (isBedrock(player)) return; // Bedrock skins are managed by Floodgate/Geyser.
+        if (isBedrock(player)) return; // Preserve Bedrock-native skins.
         String saved = selected(player.getUniqueId());
         if (saved != null && getConfig().getBoolean("restore-on-join", true)) {
             apply(player, saved, false);
@@ -126,7 +127,7 @@ public final class HollowSkins extends JavaPlugin implements Listener, TabExecut
 
     private void apply(Player player, String name, boolean notify) {
         if (!USERNAME.matcher(name).matches()) { if (notify) player.sendMessage("§cInvalid Minecraft username."); return; }
-        if (isBedrock(player)) { if (notify) player.sendMessage("§eBedrock skins are handled by Geyser/Floodgate."); return; }
+        if (isBedrock(player)) { if (notify) player.sendMessage("§eBedrock skin changes are not supported yet; your native Bedrock skin is preserved."); return; }
         UUID id = player.getUniqueId();
         long request = generation.merge(id, 1L, Long::sum);
         if (notify) player.sendMessage("§b[HollowSkins] §7Loading skin for §f" + name + "§7...");
@@ -185,9 +186,14 @@ public final class HollowSkins extends JavaPlugin implements Listener, TabExecut
             ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
             SkullMeta meta = (SkullMeta) skull.getItemMeta();
             meta.setDisplayName("§b" + username);
-            // Set owning player name for head preview; Paper/Mojang may resolve asynchronously.
-            meta.setOwningPlayer(Bukkit.getOfflinePlayer(username));
-            meta.setLore(List.of("§7Click to wear this skin"));
+            Texture texture = cache.get(username.toLowerCase(java.util.Locale.ROOT));
+            if (texture != null) {
+                setHeadTexture(meta, username, texture);
+                meta.setLore(List.of("§aPreview loaded", "§7Click to wear this skin"));
+            } else {
+                meta.setLore(List.of("§eLoading preview...", "§7Click to wear this skin"));
+                loadPreview(username);
+            }
             skull.setItemMeta(meta);
             inv.setItem(i, skull);
         }
@@ -195,6 +201,52 @@ public final class HollowSkins extends JavaPlugin implements Listener, TabExecut
         inv.setItem(49, named(Material.BARRIER, "&cReset to your username skin"));
         if (page < maxPage) inv.setItem(53, named(Material.ARROW, "&eNext page"));
         player.openInventory(inv);
+    }
+
+    // Assign the signed Mojang texture directly; offline UUID lookups do not reliably populate skulls.
+    @SuppressWarnings("deprecation")
+    private void setHeadTexture(SkullMeta meta, String username, Texture texture) {
+        UUID profileId = UUID.nameUUIDFromBytes(("HollowSkins:" + username.toLowerCase(java.util.Locale.ROOT))
+            .getBytes(StandardCharsets.UTF_8));
+        PlayerProfile profile = Bukkit.createProfile(profileId, username);
+        profile.setProperty(new ProfileProperty("textures", texture.value(), texture.signature()));
+        meta.setPlayerProfile(profile);
+    }
+
+    private void loadPreview(String username) {
+        String key = username.toLowerCase(java.util.Locale.ROOT);
+        if (!pendingPreviews.add(key)) return;
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                fetch(username);
+                Bukkit.getScheduler().runTask(this, () -> refreshVisiblePreviews(key));
+            } catch (Exception ex) {
+                getLogger().fine("Preview unavailable for " + username + ": " + ex.getMessage());
+            } finally {
+                pendingPreviews.remove(key);
+            }
+        });
+    }
+
+    private void refreshVisiblePreviews(String key) {
+        Texture texture = cache.get(key);
+        if (texture == null) return;
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            if (!(viewer.getOpenInventory().getTopInventory().getHolder() instanceof SkinMenu holder)) continue;
+            Inventory inv = viewer.getOpenInventory().getTopInventory();
+            for (int slot = 0; slot < 45; slot++) {
+                int index = holder.page * 45 + slot;
+                if (index >= holder.names.size()) break;
+                String name = holder.names.get(index);
+                if (!name.equalsIgnoreCase(key)) continue;
+                ItemStack item = inv.getItem(slot);
+                if (item == null || !(item.getItemMeta() instanceof SkullMeta meta)) continue;
+                setHeadTexture(meta, name, texture);
+                meta.setLore(List.of("§aPreview loaded", "§7Click to wear this skin"));
+                item.setItemMeta(meta);
+                inv.setItem(slot, item);
+            }
+        }
     }
 
     @EventHandler public void onClick(InventoryClickEvent event) {
