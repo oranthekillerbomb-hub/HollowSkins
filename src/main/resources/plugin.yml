@@ -1,0 +1,16 @@
+name: HollowSkins
+version: 1.0.0
+main: tech.hollowsmp.skins.HollowSkins
+api-version: '1.21'
+author: Hollow SMP
+softdepend: [AuthMe, floodgate, Geyser-Spigot]
+commands:
+  hskin:
+    description: Skin commands
+    usage: /hskin help
+    aliases: [hskins]
+permissions:
+  hollowskins.use:
+    default: true
+  hollowskins.admin:
+    default: op

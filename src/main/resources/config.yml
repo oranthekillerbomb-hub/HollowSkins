@@ -1,0 +1,49 @@
+# When a player has no saved selection, fetch their matching Mojang skin automatically.
+auto-fetch-on-join: true
+# Apply a saved skin when players join.
+restore-on-join: true
+# Fetch timeouts in milliseconds.
+http-timeout-ms: 7000
+# Mojang usernames used to populate the menu. Add or remove names freely.
+# These are real Mojang account skins, not custom launcher-only skins.
+catalog:
+  - Notch
+  - jeb_
+  - Dinnerbone
+  - Technoblade
+  - Dream
+  - Grian
+  - MumboJumbo
+  - TommyInnit
+  - Tubbo
+  - Ph1LzA
+  - Ranboo
+  - Sapnap
+  - GeorgeNotFound
+  - BadBoyHalo
+  - Skeppy
+  - CaptainSparklez
+  - DanTDM
+  - SSundee
+  - PopularMMOs
+  - PrestonPlayz
+  - BajanCanadian
+  - JeromeASF
+  - Logdotzip
+  - awesamdude
+  - KarlJacobs
+  - Quackity
+  - Wilbur
+  - SkyDoesMinecraft
+  - AntVenom
+  - Purpled
+  - fruitberries
+  - Smallishbeans
+  - LDShadowLady
+  - GoodTimesWithScar
+  - EthosLab
+  - impulseSV
+  - PearlescentMoon
+  - GeminiTay
+  - Xisuma
+  - xisumavoid
